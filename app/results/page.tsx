@@ -4,17 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import { demoStudent } from "@/lib/data/demoStudent";
-import { loadDiagnosticResults } from "@/lib/utils/storage";
+import { loadDiagnosticResults, loadDiagnosticTopic } from "@/lib/utils/storage";
 import { groupPatterns, PRIORITY_LABEL } from "@/lib/utils/patterns";
 import { linkAccent, buttonSecondarySmall } from "@/lib/ui/buttonStyles";
 import { QuestionAttemptResult } from "@/types";
 
 export default function ResultsPage() {
   const [results, setResults] = useState<QuestionAttemptResult[] | null>(null);
+  const [topic, setTopic] = useState<string | null>(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of browser-only storage, no SSR value exists
     setResults(loadDiagnosticResults());
+    setTopic(loadDiagnosticTopic());
   }, []);
 
   if (results === null) {
@@ -49,6 +51,7 @@ export default function ResultsPage() {
           <h1 className="text-xl font-semibold tracking-tight text-foreground">
             Your diagnostic results
           </h1>
+          {topic && <p className="mt-0.5 text-sm text-muted">{topic}</p>}
           <p className="mt-1 text-3xl font-semibold text-foreground">{score}%</p>
           <p className="text-sm text-muted">Overall mastery this session</p>
         </div>
@@ -133,6 +136,15 @@ export default function ResultsPage() {
                     </span>
                   )}
                 </p>
+                {!r.result.correct &&
+                  r.result.errorType &&
+                  !r.result.misconceptionId &&
+                  (r.result.analysisSource === "ai" || r.result.analysisSource === "ai_image") && (
+                    <p className="mt-1 text-xs text-muted">
+                      Reasoning error detected, but this pattern isn&apos;t in the current
+                      misconception library yet.
+                    </p>
+                  )}
               </div>
             ))}
           </div>

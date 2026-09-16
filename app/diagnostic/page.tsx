@@ -5,21 +5,25 @@ import { useRouter } from "next/navigation";
 import AppShell from "@/components/layout/AppShell";
 import { questions } from "@/lib/data/questions";
 import { demoStudent } from "@/lib/data/demoStudent";
-import { analyzeSolutionFromImage, PreviousAttemptSignal } from "@/lib/utils/api";
+import { analyzeSolutionFromImage, generateQuestions, PreviousAttemptSignal } from "@/lib/utils/api";
 import { validateImageFile } from "@/lib/utils/image";
-import { saveDiagnosticResults } from "@/lib/utils/storage";
+import { saveDiagnosticResults, saveDiagnosticTopic } from "@/lib/utils/storage";
 import { buttonPrimary } from "@/lib/ui/buttonStyles";
-import { QuestionAttemptResult } from "@/types";
+import { Question, QuestionAttemptResult } from "@/types";
 
-const TOPICS = Array.from(new Set(questions.map((q) => q.concept)));
+const POPULAR_TOPICS = Array.from(new Set(questions.map((q) => q.concept)));
 
 type Status = "idle" | "loading" | "error";
+type TopicStatus = "idle" | "loading" | "error";
 
 export default function DiagnosticPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [topicInput, setTopicInput] = useState("");
+  const [topicStatus, setTopicStatus] = useState<TopicStatus>("idle");
   const [topic, setTopic] = useState<string | null>(null);
+  const [topicQuestions, setTopicQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
   const [results, setResults] = useState<QuestionAttemptResult[]>([]);
 
@@ -30,7 +34,6 @@ export default function DiagnosticPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [unavailableNotice, setUnavailableNotice] = useState(false);
 
-  const topicQuestions = topic ? questions.filter((q) => q.concept === topic) : [];
   const question = topicQuestions[index];
   const isLast = index === topicQuestions.length - 1;
 
@@ -40,11 +43,58 @@ export default function DiagnosticPage() {
     };
   }, [imagePreviewUrl]);
 
-  function selectTopic(nextTopic: string) {
-    setTopic(nextTopic);
+  function beginTopicSession(resolvedTopic: string, resolvedQuestions: Question[]) {
+    setTopic(resolvedTopic);
+    setTopicQuestions(resolvedQuestions);
     setIndex(0);
     setResults([]);
     resetSubmissionState();
+  }
+
+  function changeTopic() {
+    setTopic(null);
+    setTopicQuestions([]);
+    setTopicInput("");
+    setIndex(0);
+    setResults([]);
+    setTopicStatus("idle");
+    resetSubmissionState();
+  }
+
+  async function handleStartPractice() {
+    const trimmed = topicInput.trim();
+    if (!trimmed) return;
+
+    setTopicStatus("idle");
+
+    const localMatch = POPULAR_TOPICS.find(
+      (t) => t.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (localMatch) {
+      beginTopicSession(
+        localMatch,
+        questions.filter((q) => q.concept === localMatch)
+      );
+      return;
+    }
+
+    setTopicStatus("loading");
+    try {
+      const result = await generateQuestions(trimmed, 5);
+      const generated: Question[] = result.questions.map((q) => ({
+        id: q.id,
+        subject: result.topic,
+        concept: q.concept,
+        question: q.question,
+        answer: q.expectedAnswer ?? "",
+        misconceptions: [],
+      }));
+      if (generated.length === 0) throw new Error("No questions generated");
+      setTopicStatus("idle");
+      beginTopicSession(result.topic || trimmed, generated);
+    } catch {
+      setTopicStatus("error");
+    }
   }
 
   function resetSubmissionState() {
@@ -121,6 +171,7 @@ export default function DiagnosticPage() {
 
       if (isLast) {
         saveDiagnosticResults(nextResults);
+        if (topic) saveDiagnosticTopic(topic);
         router.push("/results");
       } else {
         setIndex(index + 1);
@@ -133,22 +184,67 @@ export default function DiagnosticPage() {
   if (!topic) {
     return (
       <AppShell studentName={demoStudent.name}>
-        <div className="mx-auto flex max-w-2xl flex-col gap-6">
+        <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4 sm:gap-6">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              Choose what you want to practice
+            <h1 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+              What do you want to practice?
             </h1>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            {TOPICS.map((t) => (
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleStartPractice();
+            }}
+            className="flex flex-col gap-2"
+          >
+            <label htmlFor="topic-input" className="text-sm font-medium text-foreground">
+              Search a topic or concept
+            </label>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
+              <input
+                id="topic-input"
+                type="text"
+                value={topicInput}
+                onChange={(e) => setTopicInput(e.target.value)}
+                placeholder="Search a topic or concept..."
+                className="w-full min-w-0 flex-1 rounded-md border border-border bg-surface p-2.5 text-sm text-foreground focus:border-accent focus:outline-none"
+              />
               <button
-                key={t}
-                onClick={() => selectTopic(t)}
-                className="rounded-md border border-border bg-surface px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-background sm:min-w-[180px]"
+                type="submit"
+                disabled={topicStatus === "loading" || !topicInput.trim()}
+                className={buttonPrimary}
               >
-                {t}
+                {topicStatus === "loading" ? "Preparing questions..." : "Start practice"}
               </button>
-            ))}
+            </div>
+          </form>
+
+          {topicStatus === "error" && (
+            <div
+              role="alert"
+              className="rounded-md border border-error/30 bg-error/5 p-3 text-sm text-error"
+            >
+              We couldn&apos;t generate questions for this topic right now. Please try again.
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+              Popular topics
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {POPULAR_TOPICS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTopicInput(t)}
+                  className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-background"
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </AppShell>
@@ -157,7 +253,7 @@ export default function DiagnosticPage() {
 
   return (
     <AppShell studentName={demoStudent.name}>
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4 sm:gap-6">
         <div>
           <div className="h-1 w-full rounded-full bg-background" aria-hidden="true">
             <div
@@ -165,23 +261,19 @@ export default function DiagnosticPage() {
               style={{ width: `${(index / topicQuestions.length) * 100}%` }}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between">
+          <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-muted">
               Question {index + 1} of {topicQuestions.length} — {topic}
             </p>
             <button
-              onClick={() => {
-                setTopic(null);
-                setIndex(0);
-                setResults([]);
-                resetSubmissionState();
-              }}
-              className="text-xs font-medium text-accent underline transition-opacity hover:opacity-80"
+              type="button"
+              onClick={changeTopic}
+              className="self-start text-xs font-medium text-accent underline transition-opacity hover:opacity-80 sm:self-auto"
             >
               Choose a different topic
             </button>
           </div>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight text-foreground">
+          <h1 className="mt-1 break-words text-lg font-semibold tracking-tight text-foreground sm:text-xl">
             {question.question}
           </h1>
         </div>
@@ -192,7 +284,7 @@ export default function DiagnosticPage() {
           {!imagePreviewUrl && (
             <label
               htmlFor="solution-image"
-              className="relative flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface px-4 py-10 text-center transition-colors hover:bg-background"
+              className="relative flex cursor-pointer flex-col items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface px-4 py-8 text-center transition-colors hover:bg-background sm:py-10"
             >
               <input
                 ref={fileInputRef}
@@ -214,10 +306,11 @@ export default function DiagnosticPage() {
               <img
                 src={imagePreviewUrl}
                 alt="Preview of your uploaded solution"
-                className="mx-auto max-h-64 rounded-md object-contain"
+                className="mx-auto h-auto max-h-64 w-full max-w-full rounded-md object-contain"
               />
               <div className="mt-2 flex justify-center">
                 <button
+                  type="button"
                   onClick={handleRemoveImage}
                   className="text-xs font-medium text-accent underline transition-opacity hover:opacity-80"
                 >
@@ -258,6 +351,7 @@ export default function DiagnosticPage() {
           <div role="alert" className="rounded-md border border-error/30 bg-error/5 p-3 text-sm text-error">
             We couldn&apos;t analyze this attempt right now. Your work is saved.
             <button
+              type="button"
               onClick={handleSubmit}
               className="ml-2 font-medium underline transition-opacity hover:opacity-80"
             >
@@ -268,6 +362,7 @@ export default function DiagnosticPage() {
 
         <div>
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={status === "loading" || !imageFile}
             className={buttonPrimary}

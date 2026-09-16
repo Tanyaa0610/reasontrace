@@ -55,7 +55,7 @@ export default function AppShell({
             })}
           </ul>
         </nav>
-        <main id="main-content" className="flex-1 px-4 py-6 sm:px-8 sm:py-8">
+        <main id="main-content" className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
           {children}
         </main>
       </div>

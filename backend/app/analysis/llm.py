@@ -80,6 +80,31 @@ Return strict JSON with exactly these keys:
 """
 
 
+QUESTION_GENERATION_SYSTEM_PROMPT = """You are an assessment designer creating short diagnostic questions for a student-facing learning app.
+
+Generate questions appropriate to the requested topic, for the requested count.
+
+Rules:
+- Avoid ambiguous questions — each question should have one clear, well-defined task.
+- Provide a deterministic expectedAnswer whenever the topic allows one (math, logic, a single correct fact or value). Double-check that each expectedAnswer is actually correct before including it.
+- If a question is inherently open-ended or has no single correct answer, set expectedAnswer to null rather than guessing one.
+- Vary difficulty across the set: mix of easy, medium, and hard.
+- Focus on testing reasoning and understanding, not trivia or recall of obscure facts.
+
+Return strict JSON only, with exactly this shape:
+{
+  "questions": [
+    {
+      "concept": string,
+      "question": string,
+      "expectedAnswer": string | null,
+      "difficulty": "easy" | "medium" | "hard"
+    }
+  ]
+}
+"""
+
+
 def is_configured() -> bool:
     return bool(os.environ.get("OPENAI_API_KEY"))
 
@@ -171,6 +196,74 @@ def analyze_with_llm(
         raw = response.choices[0].message.content
         data = json.loads(raw)
         return _validate(data)
+    except Exception:
+        return None
+
+
+def _validate_generated_questions(data: dict, topic: str, count: int) -> Optional[List[dict]]:
+    if not isinstance(data, dict):
+        return None
+    items = data.get("questions")
+    if not isinstance(items, list) or len(items) == 0:
+        return None
+
+    validated: List[dict] = []
+    for i, item in enumerate(items[: max(count, 1)]):
+        if not isinstance(item, dict):
+            continue
+        question_text = str(item.get("question") or "").strip()
+        if not question_text:
+            continue
+
+        concept = str(item.get("concept") or topic).strip() or topic
+
+        difficulty = item.get("difficulty")
+        if difficulty not in ("easy", "medium", "hard"):
+            difficulty = "medium"
+
+        expected_answer = item.get("expectedAnswer")
+        expected_answer = (
+            str(expected_answer).strip() if expected_answer not in (None, "") else None
+        )
+
+        validated.append(
+            {
+                "id": f"gen-{i + 1}",
+                "topic": topic,
+                "concept": concept,
+                "question": question_text,
+                "expectedAnswer": expected_answer,
+                "difficulty": difficulty,
+            }
+        )
+
+    return validated if validated else None
+
+
+def generate_questions_with_llm(topic: str, count: int) -> Optional[List[dict]]:
+    """Returns a validated list of generated question dicts, or None on any
+    failure — caller decides how to respond to the student (e.g. fall back
+    to the local question bank, or show a clear "couldn't generate" error).
+    Never fabricates a fallback question itself.
+    """
+    if not is_configured():
+        return None
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(timeout=REQUEST_TIMEOUT_SECONDS)
+        response = client.chat.completions.create(
+            model=os.environ.get("OPENAI_MODEL", DEFAULT_MODEL),
+            messages=[
+                {"role": "system", "content": QUESTION_GENERATION_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps({"topic": topic, "count": count})},
+            ],
+            response_format={"type": "json_object"},
+        )
+        raw = response.choices[0].message.content
+        data = json.loads(raw)
+        return _validate_generated_questions(data, topic, count)
     except Exception:
         return None
 

@@ -1,4 +1,4 @@
-export type Subject = "Mathematics";
+export type Subject = string;
 
 export interface Question {
   id: string;

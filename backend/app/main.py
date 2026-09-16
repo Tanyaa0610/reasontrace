@@ -9,6 +9,7 @@ from app.analysis.engine import analyze, apply_recurrence, determine_correctness
 from app.analysis.llm import (
     analyze_image_with_llm,
     analyze_with_llm,
+    generate_questions_with_llm,
     is_configured as is_llm_configured,
 )
 from app.analysis.taxonomy import TAXONOMY, get_misconception
@@ -60,6 +61,28 @@ def health() -> dict:
     return {"status": "ok", "aiConfigured": is_llm_configured()}
 
 
+def _resolve_misconception(
+    misconception_id: Optional[str], concept: Optional[str]
+) -> tuple[Optional[str], Optional[str]]:
+    """Cross-checks a model-proposed misconception id against the taxonomy,
+    including that its concept actually matches the question's concept.
+
+    The taxonomy list handed to the model is already filtered by concept, so
+    this should rarely trigger — it's a defensive backstop, not the primary
+    guard, against a model ignoring that and returning an id from an
+    unrelated concept (which matters more now that arbitrary topics outside
+    the taxonomy's coverage are possible).
+    """
+    if not misconception_id:
+        return None, None
+    entry = get_misconception(misconception_id)
+    if entry is None:
+        return None, None
+    if concept is not None and entry.get("concept") != concept:
+        return None, None
+    return misconception_id, entry["name"]
+
+
 def _analyze_text_submission(payload: AnalyzeSolutionRequest) -> AnalyzeSolutionResponse:
     """Original JSON-body path: typed solution text. Unchanged behavior —
     still used by the practice/retest flow."""
@@ -79,24 +102,23 @@ def _analyze_text_submission(payload: AnalyzeSolutionRequest) -> AnalyzeSolution
         )
         if llm_result is not None:
             evidence = llm_result["evidence"]
+            misconception_id, misconception_name = _resolve_misconception(
+                llm_result["misconceptionId"], payload.concept
+            )
             confidence, recurrence, occurrence_count = apply_recurrence(
-                llm_result["misconceptionId"],
+                misconception_id,
                 payload.concept,
                 llm_result["confidence"],
                 evidence,
                 previous_attempts,
             )
-            misconception_name = None
-            if llm_result["misconceptionId"]:
-                entry = get_misconception(llm_result["misconceptionId"])
-                misconception_name = entry["name"] if entry else None
 
             return AnalyzeSolutionResponse(
                 correct=False,
                 errorType=llm_result["errorType"],
                 concept=payload.concept,
                 misconception=misconception_name,
-                misconceptionId=llm_result["misconceptionId"],
+                misconceptionId=misconception_id,
                 confidence=confidence,
                 errorStep=llm_result["errorStep"],
                 explanation=llm_result["explanation"] or "The submitted answer doesn't match the expected result.",
@@ -147,7 +169,7 @@ def _analyze_image_submission(
     rather than guessing).
     """
     known_correct: Optional[bool] = None
-    if final_answer:
+    if final_answer and expected_answer.strip():
         known_correct = _determine_correctness_from_final_answer(expected_answer, final_answer)
 
     if known_correct is True:
@@ -204,20 +226,19 @@ def _analyze_image_submission(
         )
 
     evidence = ai_result["evidence"]
-    confidence, recurrence, occurrence_count = apply_recurrence(
-        ai_result["misconceptionId"], concept, ai_result["confidence"], evidence, previous_attempts
+    misconception_id, misconception_name = _resolve_misconception(
+        ai_result["misconceptionId"], concept
     )
-    misconception_name = None
-    if ai_result["misconceptionId"]:
-        entry = get_misconception(ai_result["misconceptionId"])
-        misconception_name = entry["name"] if entry else None
+    confidence, recurrence, occurrence_count = apply_recurrence(
+        misconception_id, concept, ai_result["confidence"], evidence, previous_attempts
+    )
 
     return AnalyzeSolutionResponse(
         correct=False,
         errorType=ai_result["errorType"],
         concept=concept,
         misconception=misconception_name,
-        misconceptionId=ai_result["misconceptionId"],
+        misconceptionId=misconception_id,
         confidence=confidence,
         errorStep=ai_result["errorStep"],
         explanation=ai_result["explanation"] or "The submitted answer doesn't match the expected result.",
@@ -274,6 +295,49 @@ async def analyze_solution(request: Request) -> AnalyzeSolutionResponse:
 
     payload = AnalyzeSolutionRequest(**(await request.json()))
     return _analyze_text_submission(payload)
+
+
+class GenerateQuestionsRequest(BaseModel):
+    topic: str
+    count: int = 5
+
+
+class GeneratedQuestion(BaseModel):
+    id: str
+    topic: str
+    concept: str
+    question: str
+    expectedAnswer: Optional[str] = None
+    difficulty: str
+
+
+class GenerateQuestionsResponse(BaseModel):
+    topic: str
+    questions: List[GeneratedQuestion]
+
+
+@app.post("/api/generate-questions", response_model=GenerateQuestionsResponse)
+def generate_questions(payload: GenerateQuestionsRequest) -> GenerateQuestionsResponse:
+    """Used for topics that aren't in the local seeded question bank — the
+    frontend only calls this after checking there's no local match. Never
+    fabricates questions itself; if the model is unavailable or its output
+    doesn't validate, this fails clearly rather than inventing a fallback.
+    """
+    topic = payload.topic.strip()
+    if not topic:
+        raise HTTPException(status_code=400, detail="Topic is required.")
+
+    count = payload.count if payload.count and payload.count > 0 else 5
+    count = min(count, 8)
+
+    questions = generate_questions_with_llm(topic, count) if is_llm_configured() else None
+    if questions is None:
+        raise HTTPException(
+            status_code=503,
+            detail="We couldn't generate questions for this topic right now. Please try again.",
+        )
+
+    return GenerateQuestionsResponse(topic=topic, questions=questions)
 
 
 @app.get("/api/misconceptions")

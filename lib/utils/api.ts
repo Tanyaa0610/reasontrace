@@ -54,6 +54,45 @@ export async function analyzeSolution(
   return response.json();
 }
 
+export interface GeneratedQuestion {
+  id: string;
+  topic: string;
+  concept: string;
+  question: string;
+  expectedAnswer: string | null;
+  difficulty: "easy" | "medium" | "hard";
+}
+
+export interface GenerateQuestionsResult {
+  topic: string;
+  questions: GeneratedQuestion[];
+}
+
+const GENERATE_QUESTIONS_FAILURE_MESSAGE =
+  "We couldn't generate questions for this topic right now. Please try again.";
+
+export async function generateQuestions(
+  topic: string,
+  count = 5
+): Promise<GenerateQuestionsResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/api/generate-questions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, count }),
+    });
+  } catch {
+    throw new Error(GENERATE_QUESTIONS_FAILURE_MESSAGE);
+  }
+
+  if (!response.ok) {
+    throw new Error(GENERATE_QUESTIONS_FAILURE_MESSAGE);
+  }
+
+  return response.json();
+}
+
 export interface AnalyzeSolutionImageInput {
   question: string;
   expectedAnswer: string;
