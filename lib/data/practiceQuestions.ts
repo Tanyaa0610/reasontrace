@@ -1,0 +1,85 @@
+import { Question } from "@/types";
+
+export const practiceQuestions: Record<string, Question[]> = {
+  "Linear Equations": [
+    {
+      id: "practice-le-01",
+      subject: "Mathematics",
+      concept: "Linear Equations",
+      question: "Solve 3x + 5 = 20",
+      answer: "5",
+      steps: ["3x + 5 = 20", "3x = 20 - 5", "3x = 15", "x = 5"],
+      misconceptions: ["inverse_operation_confusion", "variable_isolation"],
+    },
+    {
+      id: "practice-le-02",
+      subject: "Mathematics",
+      concept: "Linear Equations",
+      question: "Solve 2x + 7 = 15",
+      answer: "4",
+      steps: ["2x + 7 = 15", "2x = 15 - 7", "2x = 8", "x = 4"],
+      misconceptions: ["inverse_operation_confusion", "variable_isolation"],
+    },
+    {
+      id: "practice-le-03",
+      subject: "Mathematics",
+      concept: "Linear Equations",
+      question: "Solve 4x + 3 = 19",
+      answer: "4",
+      steps: ["4x + 3 = 19", "4x = 19 - 3", "4x = 16", "x = 4"],
+      misconceptions: ["inverse_operation_confusion", "variable_isolation"],
+    },
+  ],
+  Fractions: [
+    {
+      id: "practice-fr-01",
+      subject: "Mathematics",
+      concept: "Fractions",
+      question: "Simplify 4/8",
+      answer: "1/2",
+      misconceptions: ["simplification_error"],
+    },
+    {
+      id: "practice-fr-02",
+      subject: "Mathematics",
+      concept: "Fractions",
+      question: "Add 1/3 + 1/6",
+      answer: "1/2",
+      misconceptions: ["unlike_denominators"],
+    },
+    {
+      id: "practice-fr-03",
+      subject: "Mathematics",
+      concept: "Fractions",
+      question: "Simplify 9/12",
+      answer: "3/4",
+      misconceptions: ["simplification_error"],
+    },
+  ],
+  Arithmetic: [
+    {
+      id: "practice-ar-01",
+      subject: "Mathematics",
+      concept: "Arithmetic",
+      question: "What is 6 x 9?",
+      answer: "54",
+      misconceptions: ["multiplication_fact_error"],
+    },
+    {
+      id: "practice-ar-02",
+      subject: "Mathematics",
+      concept: "Arithmetic",
+      question: "What is 8 x 7?",
+      answer: "56",
+      misconceptions: ["multiplication_fact_error"],
+    },
+    {
+      id: "practice-ar-03",
+      subject: "Mathematics",
+      concept: "Arithmetic",
+      question: "What is 9 x 9?",
+      answer: "81",
+      misconceptions: ["multiplication_fact_error"],
+    },
+  ],
+};

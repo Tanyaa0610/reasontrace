@@ -1,0 +1,25 @@
+# Environment / secrets
+.env
+.env.local
+*.env
+
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+
+# Node / frontend
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
