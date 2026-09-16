@@ -110,16 +110,27 @@ export default function ResultsPage() {
                     className={
                       r.result.correct
                         ? "text-sm font-medium text-success"
+                        : r.result.analysisSource === "unavailable"
+                        ? "text-sm font-medium text-warning"
                         : "text-sm font-medium text-error"
                     }
                   >
-                    {r.result.correct ? "Correct" : "Incorrect"}
+                    {r.result.correct
+                      ? "Correct"
+                      : r.result.analysisSource === "unavailable"
+                      ? "Needs your answer"
+                      : "Incorrect"}
                   </span>
                 </div>
                 <p className="mt-1 text-sm text-muted">
                   {r.result.explanation}
                   {!r.result.correct && r.result.analysisSource === "ai" && (
                     <span className="ml-2 text-xs text-muted">— analyzed by AI</span>
+                  )}
+                  {r.result.analysisSource === "ai_image" && (
+                    <span className="ml-2 text-xs text-muted">
+                      — analyzed from your uploaded solution
+                    </span>
                   )}
                 </p>
               </div>

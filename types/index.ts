@@ -35,7 +35,7 @@ export interface AnalysisResult {
   evidence: string[];
   recurrence: Recurrence | null;
   occurrenceCount: number;
-  analysisSource: "ai" | "rules";
+  analysisSource: "ai" | "ai_image" | "rules" | "unavailable";
 }
 
 export interface Attempt {

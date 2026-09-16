@@ -53,3 +53,37 @@ export async function analyzeSolution(
 
   return response.json();
 }
+
+export interface AnalyzeSolutionImageInput {
+  question: string;
+  expectedAnswer: string;
+  concept: string;
+  finalAnswer?: string;
+  image: File;
+  previousAttempts?: PreviousAttemptSignal[];
+}
+
+export async function analyzeSolutionFromImage(
+  input: AnalyzeSolutionImageInput
+): Promise<AnalysisResult> {
+  const formData = new FormData();
+  formData.append("question", input.question);
+  formData.append("expectedAnswer", input.expectedAnswer);
+  formData.append("concept", input.concept);
+  if (input.finalAnswer) {
+    formData.append("finalAnswer", input.finalAnswer);
+  }
+  formData.append("previousAttempts", JSON.stringify(input.previousAttempts ?? []));
+  formData.append("image", input.image);
+
+  const response = await fetch(`${API_URL}/api/analyze-solution`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Analysis request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}

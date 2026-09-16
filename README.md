@@ -101,10 +101,12 @@ Leaving `OPENAI_API_KEY` empty is fully supported — the app runs on the determ
 ## Demo instructions
 
 1. Start both servers (above).
-2. Go to `/diagnostic` and solve `2x + 6 = 14` incorrectly on purpose: `2x = 14 + 6`, `2x = 20`, `x = 20`.
-3. Repeat the same inverse-operation mistake on the next couple of questions.
-4. On `/results`, the recurring pattern appears with a confidence score and evidence from your actual attempts ("See why").
-5. Click "Practice" to see the intervention (what went wrong, worked example, 3 questions), complete the retest, and see the before/after score with a resolution status.
+2. Go to `/diagnostic` and choose a topic (e.g. Linear Equations).
+3. For each question, solve it on paper, then upload a photo of your handwritten work (JPG/PNG/WEBP). You can optionally type your final answer — this is what the deterministic engine uses to decide correct/incorrect with certainty; the image is the reasoning evidence.
+4. Without an `OPENAI_API_KEY` configured, image-based reasoning diagnosis isn't available — you'll be prompted to type a final answer to continue, and the app will still tell you correct/incorrect from that. With a key configured, incorrect answers get a full reasoning diagnosis read from the photo itself.
+5. Repeat the same mistake (or type the same wrong final answer) on a couple of questions to see the recurring-pattern detection kick in.
+6. On `/results`, the recurring pattern appears with a confidence score and evidence from your actual attempts ("See why").
+7. Click "Practice" to see the intervention (what went wrong, worked example, 3 questions — still typed, not image-based), complete the retest, and see the before/after score with a resolution status.
 
 ## Future scope
 
